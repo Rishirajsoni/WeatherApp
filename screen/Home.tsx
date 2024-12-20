@@ -11,6 +11,8 @@ const Home = () => {
     switch (description?.toLowerCase()) {
       case 'haze':
         return require('../assets/images/haze.png');
+
+        
       case 'rain':
         return require('../assets/images/rainy.png');
       case 'clear sky':
