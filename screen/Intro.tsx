@@ -51,6 +51,8 @@ const Intro = () => {
           enableHighAccuracy: true,
           timeout: 60000,
         });
+
+
         setCurrentLocation({ lat: location.latitude, long: location.longitude });
         const weather = await currentLocationWeather(location.latitude, location.longitude);
         setCurrentWeather(weather);
@@ -62,7 +64,7 @@ const Intro = () => {
   }, []);
 
 
-  const fetchWeatherData = async (cityName: string) => {
+  const fetchWeatherData:any = async (cityName: string) => {
     try {
       const apiKey = '41bad86193eaf4b4ffcdea63ed063f66';
       const response = await fetch(
