@@ -17,6 +17,8 @@
     "react-native-get-location": "^5.0.0",
     "react-native-navbar": "^2.1.0",
     "react-native-navigation-bar": "^0.2.1",
+    "react-native-paper": "^5.12.5",
+    "react-native-radio-buttons-group": "^3.1.0",
     "react-native-safe-area-context": "^5.0.0",
     "react-native-screens": "^4.3.0"
   },

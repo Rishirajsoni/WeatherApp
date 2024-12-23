@@ -2,7 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import GetLocation from 'react-native-get-location'
+import { RadioButton } from 'react-native-paper';
 
+type currentWeatherProps = {
+  main: {
+    temp: number;
+  },
+  weather: [{ description: string }]
+}
 const Intro = () => {
   const navigation = useNavigation<any>();
   const [cards, setCards] = useState([
@@ -14,19 +21,10 @@ const Intro = () => {
   ]);
   const [searchText, setSearchText] = useState('');
   const [currentLocation, setCurrentLocation] = useState({ lat: 0, long: 0 });
-  const [currentWeather, setCurrentWeather] = useState(null);
-
-  // GetLocation.getCurrentPosition({
-  //   enableHighAccuracy: true,
-  //   timeout: 60000,
-  // })
-  //   .then(location => {
-  //     console.log(location);
-  //   })
-  //   .catch(error => {
-  //     const { code, message } = error;
-  //     console.warn(code, message);
-  //   })
+  const [currentWeather, setCurrentWeather] = useState<currentWeatherProps>();
+  const [visible, setVisible] = useState(false);
+  const [checked, setChecked] = useState('first');
+  const yesterdayTimestamp = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
 
   useEffect(() => {
     const fetchAllWeatherData = async () => {
@@ -63,8 +61,37 @@ const Intro = () => {
     getLocationAndWeather();
   }, []);
 
+  const toggleDropdown = () => {
+    setVisible(!visible);
+  };
 
-  const fetchWeatherData:any = async (cityName: string) => {
+  const renderDropdown = () => {
+    if (visible) {
+      return (
+        <View style={styles.dropdown}>
+          <Text>
+            Select Filter
+          </Text>
+          <RadioButton.Group
+            onValueChange={value => setChecked(value)}
+            value={checked}
+          >
+            <View>
+              <RadioButton.Item label="Yestaurday" value="first" />
+            </View>
+            <View>
+              <RadioButton.Item label="1 Day ago" value="second" />
+            </View>
+            <View>
+              <RadioButton.Item label="2 Day ago" value="third" />
+            </View>
+          </RadioButton.Group>
+        </View>
+      );
+    }
+  };
+
+  const fetchWeatherData: any = async (cityName: string) => {
     try {
       const apiKey = '41bad86193eaf4b4ffcdea63ed063f66';
       const response = await fetch(
@@ -136,21 +163,29 @@ const Intro = () => {
       onPress={() => onPressLearnMore(item.name)}
     >
       <Text style={styles.cardText}>{item.name}</Text>
-      <Text>{item.temp !== null ? `${item.temp}°C` : 'Loading...'}</Text>
+      <Text style={styles.cardtemp}>{item.temp !== null ? `${item.temp}°C` : 'Loading...'}</Text>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.background}>
-      <TextInput
-        style={styles.searchBar}
-        placeholder="Search City"
-        placeholderTextColor="#888"
-        value={searchText}
-        onChangeText={(text) => setSearchText(text)}
-        onSubmitEditing={handleSearchSubmit}
-      />
-      <View style={{ alignItems: 'center' }}>
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Image style={styles.searchicon} source={require('../assets/icons/search.png')} />
+          <TextInput
+            placeholder="Search City"
+            placeholderTextColor="#888"
+            value={searchText}
+            onChangeText={(text) => setSearchText(text)}
+            onSubmitEditing={handleSearchSubmit}
+          />
+        </View>
+        <TouchableOpacity style={styles.filterButton} onPress={toggleDropdown}>
+          {renderDropdown()}
+          <Image style={styles.filtericon} source={require('../assets/icons/filter.png')} />
+        </TouchableOpacity>
+      </View>
+      <View style={{ alignItems: 'center'}}>
         <Image style={styles.hero} source={require('../assets/images/default.png')} />
       </View>
       <View>
@@ -161,10 +196,10 @@ const Intro = () => {
         <View style={styles.currentWeatherContainer}>
           <Text style={styles.currentWeatherText}>Current Location</Text>
           <Text style={styles.currentWeatherText}>
-            Temperature: {currentWeather.main.temp}°C
+            Temperature: {(currentWeather.main.temp - 273.15).toFixed(2)}°C
           </Text>
           <Text style={styles.currentWeatherText}>
-            Description: {currentWeather?.weather[0]?.description}
+            Description: {currentWeather.weather[0]?.description}
           </Text>
         </View>
       )}
@@ -181,14 +216,15 @@ const Intro = () => {
 
 const styles = StyleSheet.create({
   hero: {
-    marginTop: 90,
-    width: 300,
+    marginTop: 30,
+    width: 250,
     height: 250,
   },
   title1: {
     fontSize: 40,
     color: '#ffffff',
     textAlign: 'center',
+    fontWeight: '300',
   },
   title2: {
     fontSize: 42,
@@ -196,56 +232,125 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: '#329932',
     textAlign: 'center',
-    marginBottom: 50,
+    marginBottom: 20,
   },
   searchBar: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 20,
-    padding: 10,
-    margin: 10,
-    fontSize: 18,
-    color: 'black',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    width: 300,
+    borderRadius: 25,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    marginHorizontal: 10,
+    fontSize: 16,
+    color: '#333',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 10,
+    marginTop: 20,
+  },
+  filterButton: {
+    backgroundColor: '#329932',
+    borderRadius: 25,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    marginLeft: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 10,
+    elevation: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  searchicon: {
+    height: 20,
+    width: 20,
+  },
+  filtericon: {
+    height: 20,
+    width: 20,
   },
   card: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 15,
-    padding: 50,
-    marginLeft: 10,
-    marginRight: 10,
-    shadowColor: 'black',
+    backgroundColor: '#ffffff',
+    borderRadius: 25,
+    padding: 40,
+    marginHorizontal: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 10,
+    elevation: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   cardText: {
     color: 'black',
     fontSize: 20,
-    marginBottom: 5,
+    fontWeight: '600',
+  },
+  cardtemp: {
+    color: 'black',
+    fontSize: 15,
   },
   cardContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    height: 150,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 10,
   },
   background: {
     backgroundColor: '#05014a',
-    height: 900,
+    height: '100%',
   },
   currentWeatherContainer: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 15,
+    backgroundColor: '#080271',
+    borderRadius: 25,
     padding: 20,
-    margin: 10,
+    margin: 20,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
   },
   currentWeatherText: {
-    color: 'black',
+    color: '#ffffff',
     fontSize: 18,
+    fontWeight: '500',
     marginBottom: 5,
   },
+  dropdown: {
+    zIndex:10,
+    padding: 10,
+    position: 'absolute',
+    borderRadius: 5,
+    height: 200,
+    width: 180,
+    backgroundColor: '#fff',
+    top: 60,
+    right: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,   
+  },
+  // radioItem: {
+  //   marginBottom: 10,
+  // },
 });
+
 
 export default Intro;
 function alert(arg0: string) {
   throw new Error('Function not implemented.');
 }
-
