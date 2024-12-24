@@ -24,7 +24,6 @@ const Intro = () => {
   const [currentWeather, setCurrentWeather] = useState<currentWeatherProps>();
   const [visible, setVisible] = useState(false);
   const [checked, setChecked] = useState('first');
-  const yesterdayTimestamp = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
 
   useEffect(() => {
     const fetchAllWeatherData = async () => {
@@ -93,7 +92,7 @@ const Intro = () => {
 
   const fetchWeatherData: any = async (cityName: string) => {
     try {
-      const apiKey = '41bad86193eaf4b4ffcdea63ed063f66';
+      const apiKey = process.env.API_KEY;
       const response = await fetch(
         `https://api.openweathermap.org/data/2.5/weather?q=${cityName}&appid=${apiKey}&units=metric`
       );
@@ -110,11 +109,12 @@ const Intro = () => {
     }
   };
 
+ 
   const currentLocationWeather = async (lat: number, long: number) => {
     try {
-      const apiKey = '41bad86193eaf4b4ffcdea63ed063f66';
+      const apiKey = process.env.API_KEY;
       const response = await fetch(
-        `http://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${long}&appid=${apiKey}`
+        `http://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${long}&appid=${apiKey}&units=metric`
       );
       const data = await response.json();
       if (data.cod === 200) {
@@ -137,6 +137,9 @@ const Intro = () => {
         temp: weather.main.temp,
         feelsLike: weather.main.feels_like,
         description: weather.weather[0].description,
+        latitude:weather.coord.lat,
+        longitude:weather.coord.lon,
+        date_stamp:weather.dt,
       });
       setSearchText('');
     } else {
@@ -152,6 +155,9 @@ const Intro = () => {
         temp: weather.main.temp,
         feelsLike: weather.main.feels_like,
         description: weather.weather[0].description,
+        latitude:weather.coord.lat,
+        longitude:weather.coord.lon,
+        date_stamp:weather.dt,
       });
     }
   };
@@ -194,9 +200,9 @@ const Intro = () => {
       </View>
       {currentWeather && (
         <View style={styles.currentWeatherContainer}>
-          <Text style={styles.currentWeatherText}>Current Location</Text>
+          <Text style={styles.currentWeatheHead}>Current Location Weather</Text>
           <Text style={styles.currentWeatherText}>
-            Temperature: {(currentWeather.main.temp - 273.15).toFixed(2)}°C
+            Temperature: {currentWeather.main.temp}°C
           </Text>
           <Text style={styles.currentWeatherText}>
             Description: {currentWeather.weather[0]?.description}
@@ -322,6 +328,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 3 },
     elevation: 5,
+  },
+  currentWeatheHead: {
+    color: '#329932',
+    fontSize: 18,
+    fontWeight: '500',
   },
   currentWeatherText: {
     color: '#ffffff',

@@ -5,18 +5,30 @@ import { RadioButton } from 'react-native-paper';
 
 const Home = () => {
   const navigation = useNavigation();
+
   type RouteParams = {
     params: {
       name: string;
       temp: number;
       feelsLike: number;
       description: string;
+      latitude: number;
+      longitude: number;
+      date_stamp: number;
     };
   };
 
   const route = useRoute<RouteProp<RouteParams, 'params'>>();
-  const { name, temp, feelsLike, description } = route.params ?? {};
+  const { name, temp, feelsLike, description, latitude, longitude, date_stamp } = route.params ?? {};
 
+  const [visible, setVisible] = useState(false);
+  const [checked, setChecked] = useState('default');
+  const [forecastWeather, setForecastWeather] = useState<any>({
+    temperature: temp,
+    feels_like: feelsLike,
+    description: description,
+  });
+ 
   const getWeatherImage = (description: string) => {
     switch (description?.toLowerCase()) {
       case 'haze':
@@ -33,32 +45,97 @@ const Home = () => {
         return require('../assets/images/default.png');
     }
   };
-  const [visible, setVisible] = useState(false);
-  const [checked, setChecked] = useState('first');
 
   const toggleDropdown = () => {
     setVisible(!visible);
+  };
+
+  type WeatherEntry = {
+    dt: number;
+    main: {
+      temp: number;
+      feels_like: number;
+    };
+    weather: {
+      description: string;
+    }[];
+    dt_txt: string;
+  };
+
+  type ForecastResponse = {
+    list: WeatherEntry[];
+  };
+
+  const fetchAndStoreWeatherData = async (dayOffset: number) => {
+    try {
+      const interval = 3 * 60 * 60;
+      const next_dt = (Math.floor(date_stamp / interval) + 1) * interval;
+      const targetDT = next_dt + dayOffset * 86400;
+      const apiKey = process.env.API_KEY;
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric`
+      );
+      const data: ForecastResponse = await response.json();
+      const forecast = data.list.find((entry: WeatherEntry) => entry.dt === targetDT);
+      if (forecast) {
+        const weatherData = {
+          temperature: forecast.main.temp,
+          feels_like: forecast.main.feels_like,
+          description: forecast.weather[0].description,
+        };
+        setForecastWeather(weatherData);
+      } else {
+        console.log("No forecast found for the given dt.");
+        setForecastWeather(null);
+      }
+    } catch (error) {
+      console.error("Error fetching weather data:", error);
+    }
+  };
+
+  const handleRadioButtonChange = (value: string) => {
+    setChecked(value);
+
+    const dayOffsetMapping: { [key: string]: number } = {
+      default: 0,
+      first: 1,
+      second: 2,
+      third: 3,
+    };
+
+    const dayOffset = dayOffsetMapping[value];
+
+    if (value === "default") {
+      setForecastWeather({
+        temperature: temp,
+        feels_like: feelsLike,
+        description: description,
+      });
+    } else {
+      fetchAndStoreWeatherData(dayOffset);
+    }
   };
 
   const renderDropdown = () => {
     if (visible) {
       return (
         <View style={styles.dropdown}>
-          <Text>
-            Select Filter
-          </Text>
+          <Text>Select Filter</Text>
           <RadioButton.Group
-            onValueChange={value => setChecked(value)}
+            onValueChange={handleRadioButtonChange}
             value={checked}
           >
             <View>
-              <RadioButton.Item label="Yestaurday" value="first" />
+              <RadioButton.Item label="Today" value="default" />
             </View>
             <View>
-              <RadioButton.Item label="1 Day ago" value="second" />
+              <RadioButton.Item label="Tomorrow" value="first" />
             </View>
             <View>
-              <RadioButton.Item label="2 Day ago" value="third" />
+              <RadioButton.Item label="After 1 day" value="second" />
+            </View>
+            <View>
+              <RadioButton.Item label="After 2 days" value="third" />
             </View>
           </RadioButton.Group>
         </View>
@@ -79,11 +156,20 @@ const Home = () => {
         <Image style={styles.filtericon} source={require('../assets/icons/filter.png')} />
       </TouchableOpacity>
 
-      <Image style={styles.weatherImage} source={getWeatherImage(description)} />
+      <Image
+        style={styles.weatherImage}
+        source={getWeatherImage(forecastWeather?.description || description)}
+      />
       <Text style={styles.cityName}>{name}</Text>
-      <Text style={styles.temp}>{temp}°C</Text>
-      <Text style={styles.feelsLike}>Feels like: {feelsLike}°C</Text>
-      <Text style={styles.weatherDescription}>Weather: {description}</Text>
+      <Text style={styles.temp}>
+        {forecastWeather ? `${forecastWeather.temperature}°C` : `${temp}°C`}
+      </Text>
+      <Text style={styles.feelsLike}>
+        Feels like: {forecastWeather ? `${forecastWeather.feels_like}°C` : `${feelsLike}°C`}
+      </Text>
+      <Text style={styles.weatherDescription}>
+        Weather: {forecastWeather ? forecastWeather.description : description}
+      </Text>
     </View>
   );
 };
@@ -165,7 +251,7 @@ const styles = StyleSheet.create({
     padding: 10,
     position: 'absolute',
     borderRadius: 5,
-    height: 200,
+    height: 250,
     width: 180,
     backgroundColor: '#fff',
     top: 60,
