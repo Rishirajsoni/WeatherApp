@@ -33,6 +33,7 @@ const Intro = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         refreshToken: `${Refreshtoken}`,
+        expiresInMins: 5,
       }),
       credentials: 'include'
     });
