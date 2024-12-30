@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, SafeAreaView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
 import GetLocation from 'react-native-get-location'
-import { RadioButton } from 'react-native-paper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { jwtDecode } from "jwt-decode";
 
 type currentWeatherProps = {
   main: {
@@ -20,10 +21,88 @@ const Intro = () => {
     { name: 'Bengaluru', temp: null },
   ]);
   const [searchText, setSearchText] = useState('');
-  const [currentLocation, setCurrentLocation] = useState({ lat: 0, long: 0 });
   const [currentWeather, setCurrentWeather] = useState<currentWeatherProps>();
+  const [UserDetail, setUserDetail] = useState<any>('');
   const [visible, setVisible] = useState(false);
-  const [checked, setChecked] = useState('first');
+
+
+  const RefreshSession = async () => {
+    const Refreshtoken = await AsyncStorage.getItem('Refreshtoken');
+    const response = await fetch('https://dummyjson.com/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        refreshToken: `${Refreshtoken}`,
+      }),
+      credentials: 'include'
+    });
+    const data = await response.json();
+    if(response.ok || data.accessToken) {
+      await AsyncStorage.setItem('token', (data.accessToken));
+      await AsyncStorage.setItem('Refreshtoken', (data.refreshToken));
+      Alert.alert('Session Refresh successfull');
+     }else {
+         Alert.alert('Refresh Session Failed');
+     }
+  };
+
+  const scheduleTokenRefresh = async () => {
+    const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      Alert.alert('No token found');
+      return;
+    }
+    const decoded = jwtDecode(token);
+    const expirationTime = decoded.exp * 1000;
+    const refreshTime = expirationTime - 2 * 60 * 1000;
+    const timeoutDuration = refreshTime - Date.now();
+  
+    if (Date.now() >= expirationTime) {
+      await RefreshSession();
+    } else if (timeoutDuration > 0) {
+      setTimeout(async () => {
+        await RefreshSession();
+      }, timeoutDuration);
+    } else {
+      await RefreshSession();
+    }
+  };
+  useEffect(() => {
+    scheduleTokenRefresh();
+  }, []);
+
+
+  const fetchUserDetail = async () => {
+    const token = await AsyncStorage.getItem('token');
+    const response = await fetch('https://dummyjson.com/auth/me', {
+      method: 'GET',
+      headers: { "Authorization": `Bearer ${token}` },
+      credentials: 'include'
+    });
+    const data = await response.json();
+    setUserDetail(data);
+  };
+  useEffect(() => {
+    fetchUserDetail();
+  }, []);
+
+  const logoutUser = async () => {
+    try {
+      await AsyncStorage.removeItem('token');
+      return true;
+    } catch (exception) {
+      return false;
+    }
+  };
+
+  const handleLogout = async () => {
+    const isLoggedOut = await logoutUser();
+    if (isLoggedOut) {
+      navigation.navigate("Login");
+    } else {
+      Alert.alert('Logout Failed');
+    }
+  };
 
   useEffect(() => {
     const fetchAllWeatherData = async () => {
@@ -48,9 +127,6 @@ const Intro = () => {
           enableHighAccuracy: true,
           timeout: 60000,
         });
-
-
-        setCurrentLocation({ lat: location.latitude, long: location.longitude });
         const weather = await currentLocationWeather(location.latitude, location.longitude);
         setCurrentWeather(weather);
       } catch (error) {
@@ -60,34 +136,8 @@ const Intro = () => {
     getLocationAndWeather();
   }, []);
 
-  const toggleDropdown = () => {
+  const toggleProfile = () => {
     setVisible(!visible);
-  };
-
-  const renderDropdown = () => {
-    if (visible) {
-      return (
-        <View style={styles.dropdown}>
-          <Text>
-            Select Filter
-          </Text>
-          <RadioButton.Group
-            onValueChange={value => setChecked(value)}
-            value={checked}
-          >
-            <View>
-              <RadioButton.Item label="Yestaurday" value="first" />
-            </View>
-            <View>
-              <RadioButton.Item label="1 Day ago" value="second" />
-            </View>
-            <View>
-              <RadioButton.Item label="2 Day ago" value="third" />
-            </View>
-          </RadioButton.Group>
-        </View>
-      );
-    }
   };
 
   const fetchWeatherData: any = async (cityName: string) => {
@@ -109,7 +159,7 @@ const Intro = () => {
     }
   };
 
- 
+
   const currentLocationWeather = async (lat: number, long: number) => {
     try {
       const apiKey = process.env.API_KEY;
@@ -137,9 +187,9 @@ const Intro = () => {
         temp: weather.main.temp,
         feelsLike: weather.main.feels_like,
         description: weather.weather[0].description,
-        latitude:weather.coord.lat,
-        longitude:weather.coord.lon,
-        date_stamp:weather.dt,
+        latitude: weather.coord.lat,
+        longitude: weather.coord.lon,
+        date_stamp: weather.dt,
       });
       setSearchText('');
     } else {
@@ -155,9 +205,9 @@ const Intro = () => {
         temp: weather.main.temp,
         feelsLike: weather.main.feels_like,
         description: weather.weather[0].description,
-        latitude:weather.coord.lat,
-        longitude:weather.coord.lon,
-        date_stamp:weather.dt,
+        latitude: weather.coord.lat,
+        longitude: weather.coord.lon,
+        date_stamp: weather.dt,
       });
     }
   };
@@ -186,12 +236,36 @@ const Intro = () => {
             onSubmitEditing={handleSearchSubmit}
           />
         </View>
-        <TouchableOpacity style={styles.filterButton} onPress={toggleDropdown}>
-          {renderDropdown()}
-          <Image style={styles.filtericon} source={require('../assets/icons/filter.png')} />
+        <TouchableOpacity style={styles.ProfileButton} onPress={toggleProfile}>
+          <Image
+            style={styles.ProfileIcon}
+            source={{ uri: `${UserDetail.image}` }}
+          />
         </TouchableOpacity>
+        <Modal
+          visible={visible}
+          onRequestClose={() => setVisible(false)}
+          animationType="fade"
+          transparent={true}
+        >
+          <TouchableOpacity onPress={toggleProfile} style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Image style={styles.UserImage} source={{ uri: `${UserDetail.image}` }} />
+              <View>
+                <Text>{UserDetail.firstName} {UserDetail.lastName}</Text>
+                <Text>{UserDetail.email}</Text>
+              </View>
+              <View>
+                <TouchableOpacity style={styles.LogoutBtn} onPress={handleLogout}>
+                  <Text style={styles.LogoutBtnText}>Logout</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </View>
-      <View style={{ alignItems: 'center'}}>
+
+      <View style={{ alignItems: 'center' }}>
         <Image style={styles.hero} source={require('../assets/images/default.png')} />
       </View>
       <View>
@@ -221,6 +295,52 @@ const Intro = () => {
 };
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(6, 53, 66, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    zIndex: 10,
+    padding: 10,
+    position: 'absolute',
+    borderRadius: 25,
+    height: 400,
+    width: 350,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+  UserImage: {
+    height: 100,
+    width: 100,
+    marginBottom: 30,
+  },
+  LogoutBtnText: {
+    color: "#fff",
+    fontSize: 18,
+    justifyContent: 'center',
+  },
+  LogoutBtn: {
+    backgroundColor: '#329932',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 25,
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    marginTop: 40,
+    width: 150,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 10,
+    elevation: 5,
+  },
   hero: {
     marginTop: 30,
     width: 250,
@@ -245,7 +365,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#ffffff',
     width: 300,
-    borderRadius: 25,
+    borderRadius: 30,
     paddingVertical: 10,
     paddingHorizontal: 20,
     marginHorizontal: 10,
@@ -263,11 +383,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     marginTop: 20,
   },
-  filterButton: {
-    backgroundColor: '#329932',
-    borderRadius: 25,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+  ProfileButton: {
+    backgroundColor: '#fff',
+    borderRadius: 30,
+    paddingVertical: 5,
+    paddingHorizontal: 5,
     marginLeft: 10,
     shadowColor: '#000',
     shadowOpacity: 0.2,
@@ -282,9 +402,9 @@ const styles = StyleSheet.create({
     height: 20,
     width: 20,
   },
-  filtericon: {
-    height: 20,
-    width: 20,
+  ProfileIcon: {
+    height: 50,
+    width: 50,
   },
   card: {
     backgroundColor: '#ffffff',
@@ -340,24 +460,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 5,
   },
-  dropdown: {
-    zIndex:10,
-    padding: 10,
-    position: 'absolute',
-    borderRadius: 5,
-    height: 200,
-    width: 180,
-    backgroundColor: '#fff',
-    top: 60,
-    right: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,   
-  },
-  // radioItem: {
-  //   marginBottom: 10,
-  // },
 });
 
 
