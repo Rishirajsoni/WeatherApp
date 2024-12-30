@@ -9,10 +9,9 @@ const Login = () => {
     const navigation = useNavigation<any>();
     const [UserName, setUserName] = useState('');
     const [Password, setPassword] = useState('');
-    // const [accesstoken, setAccessToken] = useState<string | null>('');
 
-    const LoginHandler = async (UserName: string, Password: string) => {
-        const response = await fetch('https://dummyjson.com/auth/login', {
+    const loginHandler = async (UserName: string, Password: string) => {
+        const response = await fetch(`${process.env.DUMMY_API_URL}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -51,7 +50,7 @@ const Login = () => {
                 />
             </View>
             <View style={Styles.Center}>
-                <TouchableOpacity style={Styles.LoginBtn} onPress={() => LoginHandler(UserName, Password)}>
+                <TouchableOpacity style={Styles.LoginBtn} onPress={() => loginHandler(UserName, Password)}>
                     <Text style={Styles.LoginBtnText}>
                         Login
                     </Text>

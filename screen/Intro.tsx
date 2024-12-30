@@ -4,13 +4,8 @@ import { Image, SafeAreaView, Modal, ScrollView, StyleSheet, Text, TextInput, To
 import GetLocation from 'react-native-get-location'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from "jwt-decode";
+import { cardDetail, refreshToken, userDetail, weatherData } from '../Interface';
 
-type currentWeatherProps = {
-  main: {
-    temp: number;
-  },
-  weather: [{ description: string }]
-}
 const Intro = () => {
   const navigation = useNavigation<any>();
   const [cards, setCards] = useState([
@@ -21,29 +16,30 @@ const Intro = () => {
     { name: 'Bengaluru', temp: null },
   ]);
   const [searchText, setSearchText] = useState('');
-  const [currentWeather, setCurrentWeather] = useState<currentWeatherProps>();
+  const [currentWeather, setCurrentWeather] = useState<weatherData | null | undefined>();
   const [UserDetail, setUserDetail] = useState<any>('');
   const [visible, setVisible] = useState(false);
 
 
-  const RefreshSession = async () => {
-    const Refreshtoken = await AsyncStorage.getItem('Refreshtoken');
-    const response = await fetch('https://dummyjson.com/auth/refresh', {
+  const refreshSession = async () => {
+    const refreshToken = await AsyncStorage.getItem('Refreshtoken');
+    const response = await fetch(`${process.env.DUMMY_API_URL}/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        refreshToken: `${Refreshtoken}`,
+        refreshToken: `${refreshToken}`,
         expiresInMins: 5,
       }),
       credentials: 'include'
     });
-    const data = await response.json();
+    const data:refreshToken = await response.json();
     if(response.ok || data.accessToken) {
       await AsyncStorage.setItem('token', (data.accessToken));
       await AsyncStorage.setItem('Refreshtoken', (data.refreshToken));
       Alert.alert('Session Refresh successfull');
      }else {
          Alert.alert('Refresh Session Failed');
+         handleLogout();
      }
   };
 
@@ -54,18 +50,18 @@ const Intro = () => {
       return;
     }
     const decoded = jwtDecode(token);
-    const expirationTime = decoded.exp * 1000;
+    const expirationTime = (decoded.exp ?? 0) * 1000;
     const refreshTime = expirationTime - 2 * 60 * 1000;
     const timeoutDuration = refreshTime - Date.now();
   
     if (Date.now() >= expirationTime) {
-      await RefreshSession();
+      await refreshSession();
     } else if (timeoutDuration > 0) {
       setTimeout(async () => {
-        await RefreshSession();
+        await refreshSession();
       }, timeoutDuration);
     } else {
-      await RefreshSession();
+      await refreshSession();
     }
   };
   useEffect(() => {
@@ -75,12 +71,12 @@ const Intro = () => {
 
   const fetchUserDetail = async () => {
     const token = await AsyncStorage.getItem('token');
-    const response = await fetch('https://dummyjson.com/auth/me', {
+    const response = await fetch(`${process.env.DUMMY_API_URL}/me`, {
       method: 'GET',
       headers: { "Authorization": `Bearer ${token}` },
       credentials: 'include'
     });
-    const data = await response.json();
+    const data:userDetail = await response.json();
     setUserDetail(data);
   };
   useEffect(() => {
@@ -141,11 +137,11 @@ const Intro = () => {
     setVisible(!visible);
   };
 
-  const fetchWeatherData: any = async (cityName: string) => {
+  const fetchWeatherData = async (cityName: string) => {
     try {
       const apiKey = process.env.API_KEY;
       const response = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?q=${cityName}&appid=${apiKey}&units=metric`
+        `${process.env.API_URL}?q=${cityName}&appid=${apiKey}&units=metric`
       );
       const data = await response.json();
       if (data.cod === 200) {
@@ -164,10 +160,8 @@ const Intro = () => {
   const currentLocationWeather = async (lat: number, long: number) => {
     try {
       const apiKey = process.env.API_KEY;
-      const response = await fetch(
-        `http://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${long}&appid=${apiKey}&units=metric`
-      );
-      const data = await response.json();
+      const response = await fetch(`${process.env.API_URL}?lat=${lat}&lon=${long}&appid=${apiKey}&units=metric`);
+      const data:weatherData = await response.json();
       if (data.cod === 200) {
         return data;
       } else {
@@ -181,7 +175,7 @@ const Intro = () => {
   };
 
   const handleSearchSubmit = async () => {
-    const weather = await fetchWeatherData(searchText);
+    const weather:weatherData = await fetchWeatherData(searchText);
     if (weather) {
       navigation.navigate('Home', {
         name: weather.name,
@@ -194,12 +188,12 @@ const Intro = () => {
       });
       setSearchText('');
     } else {
-      alert('City not found. Please try another city.');
+      Alert.alert('City not found. Please try another city.');
     }
   };
 
   const onPressLearnMore = async (name: string) => {
-    const weather = await fetchWeatherData(name);
+    const weather:weatherData = await fetchWeatherData(name);
     if (weather) {
       navigation.navigate('Home', {
         name: weather.name,
@@ -213,7 +207,7 @@ const Intro = () => {
     }
   };
 
-  const Card = ({ item }: any) => (
+  const Card = (item: cardDetail) => (
     <TouchableOpacity
       key={item.name}
       style={styles.card}
@@ -286,8 +280,8 @@ const Intro = () => {
       )}
       <ScrollView horizontal={true}>
         <View style={styles.cardContainer}>
-          {cards.map((item) => (
-            <Card item={item} key={item.name} />
+          {cards.map((item : cardDetail) => (
+            <Card name={item.name} temp={item.temp} key={item.name} />
           ))}
         </View>
       </ScrollView>
@@ -465,6 +459,6 @@ const styles = StyleSheet.create({
 
 
 export default Intro;
-function alert(arg0: string) {
-  throw new Error('Function not implemented.');
-}
+// function alert(arg0: string) {
+//   throw new Error('Function not implemented.');
+// }

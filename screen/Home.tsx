@@ -73,7 +73,7 @@ const Home = () => {
       const targetDT = next_dt + dayOffset * 86400;
       const apiKey = process.env.API_KEY;
       const response = await fetch(
-        `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric`
+        `${process.env.API_URL_FORECAST}?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric`
       );
       const data: ForecastResponse = await response.json();
       const forecast = data.list.find((entry: WeatherEntry) => entry.dt === targetDT);
