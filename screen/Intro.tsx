@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { Image, SafeAreaView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
+import { Image, SafeAreaView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, TouchableWithoutFeedback } from 'react-native';
 import GetLocation from 'react-native-get-location'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from "jwt-decode";
@@ -19,6 +19,10 @@ const Intro = () => {
   const [currentWeather, setCurrentWeather] = useState<weatherData | null | undefined>();
   const [UserDetail, setUserDetail] = useState<any>('');
   const [visible, setVisible] = useState(false);
+  const [FirstName, setFirstName] = useState('');
+  const [LastName, setLastName] = useState('');
+  const [Email, setEmail] = useState('');
+  const [isUpdateSuccessful, setIsUpdateSuccessful] = useState(false);
 
 
   const refreshSession = async () => {
@@ -32,15 +36,15 @@ const Intro = () => {
       }),
       credentials: 'include'
     });
-    const data:refreshToken = await response.json();
-    if(response.ok || data.accessToken) {
+    const data: refreshToken = await response.json();
+    if (response.ok || data.accessToken) {
       await AsyncStorage.setItem('token', (data.accessToken));
       await AsyncStorage.setItem('Refreshtoken', (data.refreshToken));
       Alert.alert('Session Refresh successfull');
-     }else {
-         Alert.alert('Refresh Session Failed');
-         handleLogout();
-     }
+    } else {
+      Alert.alert('Refresh Session Failed');
+      handleLogout();
+    }
   };
 
   const scheduleTokenRefresh = async () => {
@@ -53,7 +57,7 @@ const Intro = () => {
     const expirationTime = (decoded.exp ?? 0) * 1000;
     const refreshTime = expirationTime - 2 * 60 * 1000;
     const timeoutDuration = refreshTime - Date.now();
-  
+
     if (Date.now() >= expirationTime) {
       await refreshSession();
     } else if (timeoutDuration > 0) {
@@ -69,6 +73,27 @@ const Intro = () => {
   }, []);
 
 
+  const updateUserDetails = async () => {
+    const response = await fetch('https://dummyjson.com/users/1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: FirstName,
+        lastName: LastName,
+        email: Email
+      })
+    });
+    const data: userDetail = await response.json();
+    setUserDetail(data);
+    setFirstName('');
+    setLastName('');
+    setEmail('');
+    setIsUpdateSuccessful(true);
+    setTimeout(() => {
+      setIsUpdateSuccessful(false);
+    }, 5000);
+  };
+
   const fetchUserDetail = async () => {
     const token = await AsyncStorage.getItem('token');
     const response = await fetch(`${process.env.DUMMY_API_URL}/me`, {
@@ -76,7 +101,7 @@ const Intro = () => {
       headers: { "Authorization": `Bearer ${token}` },
       credentials: 'include'
     });
-    const data:userDetail = await response.json();
+    const data: userDetail = await response.json();
     setUserDetail(data);
   };
   useEffect(() => {
@@ -161,7 +186,7 @@ const Intro = () => {
     try {
       const apiKey = process.env.API_KEY;
       const response = await fetch(`${process.env.API_URL}?lat=${lat}&lon=${long}&appid=${apiKey}&units=metric`);
-      const data:weatherData = await response.json();
+      const data: weatherData = await response.json();
       if (data.cod === 200) {
         return data;
       } else {
@@ -175,7 +200,7 @@ const Intro = () => {
   };
 
   const handleSearchSubmit = async () => {
-    const weather:weatherData = await fetchWeatherData(searchText);
+    const weather: weatherData = await fetchWeatherData(searchText);
     if (weather) {
       navigation.navigate('Home', {
         name: weather.name,
@@ -193,7 +218,7 @@ const Intro = () => {
   };
 
   const onPressLearnMore = async (name: string) => {
-    const weather:weatherData = await fetchWeatherData(name);
+    const weather: weatherData = await fetchWeatherData(name);
     if (weather) {
       navigation.navigate('Home', {
         name: weather.name,
@@ -243,21 +268,52 @@ const Intro = () => {
           animationType="fade"
           transparent={true}
         >
-          <TouchableOpacity onPress={toggleProfile} style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Image style={styles.UserImage} source={{ uri: `${UserDetail.image}` }} />
-              <View>
-                <Text>{UserDetail.firstName} {UserDetail.lastName}</Text>
-                <Text>{UserDetail.email}</Text>
-              </View>
-              <View>
-                <TouchableOpacity style={styles.LogoutBtn} onPress={handleLogout}>
-                  <Text style={styles.LogoutBtnText}>Logout</Text>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setVisible(false)}
+          >
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                  <Text style={styles.logoutBtnText}>Logout</Text>
+                </TouchableOpacity>
+                <Image style={styles.userImage} source={{ uri: `${UserDetail.image}` }} />
+                <Text style={styles.title}>Update Profile</Text>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>First Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={UserDetail.firstName}
+                    value={FirstName}
+                    onChangeText={(text) => setFirstName(text)}
+                  />
+                  <Text style={styles.label}>Last Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={UserDetail.lastName}
+                    value={LastName}
+                    onChangeText={(text) => setLastName(text)}
+                  />
+                  <Text style={styles.label}>Email</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={UserDetail.email}
+                    value={Email}
+                    onChangeText={(text) => setEmail(text)}
+                  />
+                </View>
+                {isUpdateSuccessful && (
+                  <Text style={styles.updateSuccess}>Update Successful!</Text>
+                )}
+                <TouchableOpacity style={styles.btn} onPress={updateUserDetails}>
+                  <Text style={styles.btnText}>Save Changes</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </TouchableWithoutFeedback>
           </TouchableOpacity>
         </Modal>
+
       </View>
 
       <View style={{ alignItems: 'center' }}>
@@ -280,7 +336,7 @@ const Intro = () => {
       )}
       <ScrollView horizontal={true}>
         <View style={styles.cardContainer}>
-          {cards.map((item : cardDetail) => (
+          {cards.map((item: cardDetail) => (
             <Card name={item.name} temp={item.temp} key={item.name} />
           ))}
         </View>
@@ -292,50 +348,94 @@ const Intro = () => {
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(6, 53, 66, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "center",
     alignItems: "center",
   },
   modalContent: {
-    zIndex: 10,
-    padding: 10,
-    position: 'absolute',
-    borderRadius: 25,
-    height: 400,
-    width: 350,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
+    width: 360,
+    padding: 20,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
+    alignItems: "center",
   },
-  UserImage: {
+  title: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 15,
+  },
+  userImage: {
     height: 100,
     width: 100,
-    marginBottom: 30,
+    borderRadius: 50,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: "#329932",
   },
-  LogoutBtnText: {
-    color: "#fff",
-    fontSize: 18,
-    justifyContent: 'center',
+  inputContainer: {
+    width: "100%",
   },
-  LogoutBtn: {
-    backgroundColor: '#329932',
-    justifyContent: 'center',
-    alignItems: 'center',
+  label: {
+    fontSize: 14,
+    color: "#555",
+    marginBottom: 5,
+    marginTop: 15,
+  },
+  input: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 14,
+    backgroundColor: "#f9f9f9",
+  },
+  updateSuccess: {
+    color: "#4CAF50",
+    fontStyle: "italic",
+    marginVertical: 10,
+  },
+  btn: {
+    backgroundColor: "#329932",
     borderRadius: 25,
-    paddingVertical: 15,
-    paddingHorizontal: 15,
-    marginTop: 40,
-    width: 150,
-    shadowColor: '#000',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    marginTop: 20,
+    shadowColor: "#000",
     shadowOpacity: 0.2,
     shadowOffset: { width: 0, height: 5 },
     shadowRadius: 10,
     elevation: 5,
   },
+  btnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  logoutBtn: {
+    position: "absolute",
+    top: 15,
+    right: 15,
+    backgroundColor: "#ff4d4d",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+  logoutBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
   hero: {
     marginTop: 30,
     width: 250,
@@ -459,6 +559,3 @@ const styles = StyleSheet.create({
 
 
 export default Intro;
-// function alert(arg0: string) {
-//   throw new Error('Function not implemented.');
-// }
