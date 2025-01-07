@@ -1,33 +1,40 @@
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useState } from 'react';
-import { Text, View, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
+import { Text, View, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { RadioButton } from 'react-native-paper';
+import { useAppDispatch, useAppSelector } from '../src/redux/hooks';
+import { RootState } from '../src/redux/store';
+import { forecastWeatherData } from '../src/redux/action';
 
 const Home = () => {
   const navigation = useNavigation();
-
-  type RouteParams = {
-    params: {
-      name: string;
-      temp: number;
-      feelsLike: number;
-      description: string;
-      latitude: number;
-      longitude: number;
-      date_stamp: number;
-    };
-  };
-
-  const route = useRoute<RouteProp<RouteParams, 'params'>>();
-  const { name, temp, feelsLike, description, latitude, longitude, date_stamp } = route.params ?? {};
+  const weatherDataRedux = useAppSelector((state: RootState) => state.getWeather.weatherData);
+  const forecastDataRedux = useAppSelector((state: RootState) => state.getForecastWeather.forecastData);
+  const loading = useAppSelector((state: RootState) => state.getWeather.loading);
+  const dispatch = useAppDispatch();
 
   const [visible, setVisible] = useState(false);
   const [checked, setChecked] = useState('default');
-  const [forecastWeather, setForecastWeather] = useState<any>({
-    temperature: temp,
-    feels_like: feelsLike,
-    description: description,
-  });
+  const [forecastWeather, setForecastWeather] = useState<any>(null);
+  
+  useEffect(() => {
+    if (weatherDataRedux) {
+      setForecastWeather({
+        temperature: weatherDataRedux.main?.temp,
+        feels_like: weatherDataRedux.main?.feels_like,
+        description: weatherDataRedux.weather[0]?.description,
+      });
+    }
+  }, [weatherDataRedux]);
+
+  useEffect(() => {
+    if(forecastDataRedux){
+      setForecastWeather({
+        temperature: forecastDataRedux.main?.temp,
+        feels_like: forecastDataRedux.main?.feels_like,
+        description: forecastDataRedux.weather[0]?.description,
+      });}
+  }, [forecastDataRedux]);
  
   const getWeatherImage = (description: string) => {
     switch (description?.toLowerCase()) {
@@ -50,49 +57,6 @@ const Home = () => {
     setVisible(!visible);
   };
 
-  type WeatherEntry = {
-    dt: number;
-    main: {
-      temp: number;
-      feels_like: number;
-    };
-    weather: {
-      description: string;
-    }[];
-    dt_txt: string;
-  };
-
-  type ForecastResponse = {
-    list: WeatherEntry[];
-  };
-
-  const fetchAndStoreWeatherData = async (dayOffset: number) => {
-    try {
-      const interval = 3 * 60 * 60;
-      const next_dt = (Math.floor(date_stamp / interval) + 1) * interval;
-      const targetDT = next_dt + dayOffset * 86400;
-      const apiKey = process.env.API_KEY;
-      const response = await fetch(
-        `${process.env.API_URL_FORECAST}?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric`
-      );
-      const data: ForecastResponse = await response.json();
-      const forecast = data.list.find((entry: WeatherEntry) => entry.dt === targetDT);
-      if (forecast) {
-        const weatherData = {
-          temperature: forecast.main.temp,
-          feels_like: forecast.main.feels_like,
-          description: forecast.weather[0].description,
-        };
-        setForecastWeather(weatherData);
-      } else {
-        console.log("No forecast found for the given dt.");
-        setForecastWeather(null);
-      }
-    } catch (error) {
-      console.error("Error fetching weather data:", error);
-    }
-  };
-
   const handleRadioButtonChange = (value: string) => {
     setChecked(value);
 
@@ -107,13 +71,14 @@ const Home = () => {
 
     if (value === "default") {
       setForecastWeather({
-        temperature: temp,
-        feels_like: feelsLike,
-        description: description,
+        temperature: weatherDataRedux.main?.temp,
+        feels_like: weatherDataRedux.main?.feels_like,
+        description: weatherDataRedux.weather[0]?.description,
       });
     } else {
-      fetchAndStoreWeatherData(dayOffset);
+      dispatch(forecastWeatherData(dayOffset , weatherDataRedux.dt , weatherDataRedux.coord.lat , weatherDataRedux.coord.lon));
     }
+    toggleDropdown();
   };
 
   const renderDropdown = () => {
@@ -143,6 +108,15 @@ const Home = () => {
     }
   };
 
+  if (loading || !forecastWeather) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" color="black" />
+        <Text>Loading Weather Data...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <TouchableOpacity
@@ -158,17 +132,17 @@ const Home = () => {
 
       <Image
         style={styles.weatherImage}
-        source={getWeatherImage(forecastWeather?.description || description)}
+        source={getWeatherImage(forecastWeather?.description || weatherDataRedux.weather[0].description)}
       />
-      <Text style={styles.cityName}>{name}</Text>
+      <Text style={styles.cityName}>{weatherDataRedux.name}</Text>
       <Text style={styles.temp}>
-        {forecastWeather ? `${forecastWeather.temperature}°C` : `${temp}°C`}
+        {forecastWeather ? `${forecastWeather.temperature}°C` : `${weatherDataRedux.main.temp}°C`}
       </Text>
       <Text style={styles.feelsLike}>
-        Feels like: {forecastWeather ? `${forecastWeather.feels_like}°C` : `${feelsLike}°C`}
+        Feels like: {forecastWeather ? `${forecastWeather.feels_like}°C` : `${weatherDataRedux.main.feels_like}°C`}
       </Text>
       <Text style={styles.weatherDescription}>
-        Weather: {forecastWeather ? forecastWeather.description : description}
+        Weather: {forecastWeather ? forecastWeather.description : weatherDataRedux.weather[0].description}
       </Text>
     </View>
   );
@@ -181,6 +155,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#f5f5f5',
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backButton: {
     position: 'absolute',

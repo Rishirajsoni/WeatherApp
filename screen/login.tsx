@@ -1,34 +1,32 @@
 import React, { useEffect, useState } from "react";
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { TextInput } from "react-native-paper";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
+import {login} from '../src/redux/action'
+import { useAppDispatch,useAppSelector } from "../src/redux/hooks";
+import { RootState } from "../src/redux/store";
 
 const Login = () => {
 
     const navigation = useNavigation<any>();
     const [UserName, setUserName] = useState('');
     const [Password, setPassword] = useState('');
+    const dispatch  = useAppDispatch();
 
-    const loginHandler = async (UserName: string, Password: string) => {
-        const response = await fetch(`${process.env.DUMMY_API_URL}/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                username: UserName,
-                password: Password,
-                expiresInMins: 5,
-            }),
-        })
-        const data = await response.json();
-        if(response.ok || data.accessToken) {
-         await AsyncStorage.setItem('token', (data.accessToken));
-         await AsyncStorage.setItem('Refreshtoken', (data.refreshToken));
-         navigation.navigate("Intro")
-        }else {
-            Alert.alert('Failed login');
-        }
+    const { user, error, loading } = useAppSelector((state: RootState) => state.auth);
+
+    const loginHandler = () => {
+        dispatch(login(UserName, Password));
     };
+
+    useEffect(() => {
+        if (user) {
+          navigation.navigate("Intro");
+        }
+        if (error) {
+          Alert.alert("Login Failed", error);
+        }
+      }, [user, error, navigation]);
 
     return (
         <View style={Styles.background}>
@@ -50,7 +48,7 @@ const Login = () => {
                 />
             </View>
             <View style={Styles.Center}>
-                <TouchableOpacity style={Styles.LoginBtn} onPress={() => loginHandler(UserName, Password)}>
+                <TouchableOpacity style={Styles.LoginBtn} onPress={() => loginHandler()}>
                     <Text style={Styles.LoginBtnText}>
                         Login
                     </Text>

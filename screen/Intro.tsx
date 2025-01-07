@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { Image, SafeAreaView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, TouchableWithoutFeedback } from 'react-native';
+import { Image, SafeAreaView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, TouchableWithoutFeedback, ActivityIndicator } from 'react-native';
 import GetLocation from 'react-native-get-location'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from "jwt-decode";
-import { cardDetail, refreshToken, userDetail, weatherData } from '../Interface';
+import { cardDetail } from '../Interface';
+import { useAppDispatch, useAppSelector } from '../src/redux/hooks';
+import { RootState } from '../src/redux/store';
+import { currentLocationWeather, fetchUserDetail, fetchWeatherData, logoutUser, refreshtoken, updateUserDetails } from '../src/redux/action';
 
 const Intro = () => {
   const navigation = useNavigation<any>();
@@ -15,37 +18,32 @@ const Intro = () => {
     { name: 'Pune', temp: null },
     { name: 'Bengaluru', temp: null },
   ]);
+
   const [searchText, setSearchText] = useState('');
-  const [currentWeather, setCurrentWeather] = useState<weatherData | null | undefined>();
-  const [UserDetail, setUserDetail] = useState<any>('');
   const [visible, setVisible] = useState(false);
   const [FirstName, setFirstName] = useState('');
   const [LastName, setLastName] = useState('');
   const [Email, setEmail] = useState('');
-  const [isUpdateSuccessful, setIsUpdateSuccessful] = useState(false);
+  const [isUpdateSuccessfulAlert, setIsUpdateSuccessfulAlert] = useState(false);
+  const dispatch = useAppDispatch();
+  const { refreshError } = useAppSelector((state: RootState) => state.refresh);
+  const fetchUserDetailData = useAppSelector((state: RootState) => state.getUser.user);
+  const updateUserDetailData = useAppSelector((state: RootState) => state.updateUser.user);
+  const currentWeather = useAppSelector((state: RootState) => state.getCurrentWeather.weatherData);
 
+  let userDetail = fetchUserDetailData;
 
-  const refreshSession = async () => {
-    const refreshToken = await AsyncStorage.getItem('Refreshtoken');
-    const response = await fetch(`${process.env.DUMMY_API_URL}/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        refreshToken: `${refreshToken}`,
-        expiresInMins: 5,
-      }),
-      credentials: 'include'
-    });
-    const data: refreshToken = await response.json();
-    if (response.ok || data.accessToken) {
-      await AsyncStorage.setItem('token', (data.accessToken));
-      await AsyncStorage.setItem('Refreshtoken', (data.refreshToken));
-      Alert.alert('Session Refresh successfull');
-    } else {
-      Alert.alert('Refresh Session Failed');
+  const handleRefreshSession = () => {
+    dispatch(refreshtoken());
+  };
+
+  useEffect(() => {
+    dispatch(fetchUserDetail());
+    if (refreshError) {
+      Alert.alert("Refresh Failed", refreshError);
       handleLogout();
     }
-  };
+  }, [refreshError]);
 
   const scheduleTokenRefresh = async () => {
     const token = await AsyncStorage.getItem('token');
@@ -59,13 +57,13 @@ const Intro = () => {
     const timeoutDuration = refreshTime - Date.now();
 
     if (Date.now() >= expirationTime) {
-      await refreshSession();
+      handleRefreshSession();
     } else if (timeoutDuration > 0) {
       setTimeout(async () => {
-        await refreshSession();
+        handleRefreshSession();
       }, timeoutDuration);
     } else {
-      await refreshSession();
+      handleRefreshSession();
     }
   };
   useEffect(() => {
@@ -73,64 +71,30 @@ const Intro = () => {
   }, []);
 
 
-  const updateUserDetails = async () => {
-    const response = await fetch('https://dummyjson.com/users/1', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        firstName: FirstName,
-        lastName: LastName,
-        email: Email
-      })
-    });
-    const data: userDetail = await response.json();
-    setUserDetail(data);
+  const handleUpdate = async () => {
+    dispatch(updateUserDetails(FirstName, LastName, Email));
     setFirstName('');
     setLastName('');
     setEmail('');
-    setIsUpdateSuccessful(true);
+    setIsUpdateSuccessfulAlert(true);
     setTimeout(() => {
-      setIsUpdateSuccessful(false);
+      setIsUpdateSuccessfulAlert(false);
     }, 5000);
   };
 
-  const fetchUserDetail = async () => {
-    const token = await AsyncStorage.getItem('token');
-    const response = await fetch(`${process.env.DUMMY_API_URL}/me`, {
-      method: 'GET',
-      headers: { "Authorization": `Bearer ${token}` },
-      credentials: 'include'
-    });
-    const data: userDetail = await response.json();
-    setUserDetail(data);
-  };
-  useEffect(() => {
-    fetchUserDetail();
-  }, []);
-
-  const logoutUser = async () => {
-    try {
-      await AsyncStorage.removeItem('token');
-      return true;
-    } catch (exception) {
-      return false;
-    }
-  };
-
   const handleLogout = async () => {
-    const isLoggedOut = await logoutUser();
-    if (isLoggedOut) {
-      navigation.navigate("Login");
-    } else {
-      Alert.alert('Logout Failed');
-    }
+    dispatch(logoutUser());
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Login" }],
+  });
   };
 
   useEffect(() => {
     const fetchAllWeatherData = async () => {
       const updatedCards = await Promise.all(
         cards.map(async (card) => {
-          const weather = await fetchWeatherData(card.name);
+          const weather = await dispatch(fetchWeatherData(card.name));
           return weather
             ? { ...card, temp: weather.main.temp }
             : card;
@@ -149,8 +113,7 @@ const Intro = () => {
           enableHighAccuracy: true,
           timeout: 60000,
         });
-        const weather = await currentLocationWeather(location.latitude, location.longitude);
-        setCurrentWeather(weather);
+        dispatch(currentLocationWeather(location.latitude, location.longitude));
       } catch (error) {
         console.warn('Error getting location:', error);
       }
@@ -162,74 +125,15 @@ const Intro = () => {
     setVisible(!visible);
   };
 
-  const fetchWeatherData = async (cityName: string) => {
-    try {
-      const apiKey = process.env.API_KEY;
-      const response = await fetch(
-        `${process.env.API_URL}?q=${cityName}&appid=${apiKey}&units=metric`
-      );
-      const data = await response.json();
-      if (data.cod === 200) {
-        return data;
-      } else {
-        console.error(`City not found: ${data.message}`);
-        return null;
-      }
-    } catch (error) {
-      console.error('Error fetching weather data:', error);
-      return null;
-    }
-  };
-
-
-  const currentLocationWeather = async (lat: number, long: number) => {
-    try {
-      const apiKey = process.env.API_KEY;
-      const response = await fetch(`${process.env.API_URL}?lat=${lat}&lon=${long}&appid=${apiKey}&units=metric`);
-      const data: weatherData = await response.json();
-      if (data.cod === 200) {
-        return data;
-      } else {
-        console.error(`Location not Found: ${data.message}`);
-        return null;
-      }
-    } catch (error) {
-      console.error('Error fetching weather data:', error);
-      return null;
-    }
-  };
-
   const handleSearchSubmit = async () => {
-    const weather: weatherData = await fetchWeatherData(searchText);
-    if (weather) {
-      navigation.navigate('Home', {
-        name: weather.name,
-        temp: weather.main.temp,
-        feelsLike: weather.main.feels_like,
-        description: weather.weather[0].description,
-        latitude: weather.coord.lat,
-        longitude: weather.coord.lon,
-        date_stamp: weather.dt,
-      });
-      setSearchText('');
-    } else {
-      Alert.alert('City not found. Please try another city.');
-    }
+    dispatch(fetchWeatherData(searchText));
+    navigation.navigate('Home');
+    setSearchText('');
   };
 
   const onPressLearnMore = async (name: string) => {
-    const weather: weatherData = await fetchWeatherData(name);
-    if (weather) {
-      navigation.navigate('Home', {
-        name: weather.name,
-        temp: weather.main.temp,
-        feelsLike: weather.main.feels_like,
-        description: weather.weather[0].description,
-        latitude: weather.coord.lat,
-        longitude: weather.coord.lon,
-        date_stamp: weather.dt,
-      });
-    }
+    dispatch(fetchWeatherData(name));
+    navigation.navigate('Home');
   };
 
   const Card = (item: cardDetail) => (
@@ -242,6 +146,18 @@ const Intro = () => {
       <Text style={styles.cardtemp}>{item.temp !== null ? `${item.temp}°C` : 'Loading...'}</Text>
     </TouchableOpacity>
   );
+
+  if (updateUserDetailData) {
+    userDetail = updateUserDetailData;
+  }
+
+  if (!userDetail) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" color="black" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.background}>
@@ -259,7 +175,7 @@ const Intro = () => {
         <TouchableOpacity style={styles.ProfileButton} onPress={toggleProfile}>
           <Image
             style={styles.ProfileIcon}
-            source={{ uri: `${UserDetail.image}` }}
+            source={{ uri: userDetail.image }}
           />
         </TouchableOpacity>
         <Modal
@@ -278,35 +194,35 @@ const Intro = () => {
                 <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                   <Text style={styles.logoutBtnText}>Logout</Text>
                 </TouchableOpacity>
-                <Image style={styles.userImage} source={{ uri: `${UserDetail.image}` }} />
+                <Image style={styles.userImage} source={{ uri: userDetail.image }} />
                 <Text style={styles.title}>Update Profile</Text>
                 <View style={styles.inputContainer}>
                   <Text style={styles.label}>First Name</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder={UserDetail.firstName}
-                    value={FirstName}
+                    placeholder={userDetail.firstName ?? ''}
+                    value={FirstName ?? ''}
                     onChangeText={(text) => setFirstName(text)}
                   />
                   <Text style={styles.label}>Last Name</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder={UserDetail.lastName}
-                    value={LastName}
+                    placeholder={userDetail.lastName}
+                    value={LastName ?? ''}
                     onChangeText={(text) => setLastName(text)}
                   />
                   <Text style={styles.label}>Email</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder={UserDetail.email}
-                    value={Email}
+                    placeholder={userDetail.email ?? ''}
+                    value={Email ?? ''}
                     onChangeText={(text) => setEmail(text)}
                   />
                 </View>
-                {isUpdateSuccessful && (
+                {isUpdateSuccessfulAlert && (
                   <Text style={styles.updateSuccess}>Update Successful!</Text>
                 )}
-                <TouchableOpacity style={styles.btn} onPress={updateUserDetails}>
+                <TouchableOpacity style={styles.btn} onPress={handleUpdate}>
                   <Text style={styles.btnText}>Save Changes</Text>
                 </TouchableOpacity>
               </View>
@@ -346,6 +262,11 @@ const Intro = () => {
 };
 
 const styles = StyleSheet.create({
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
